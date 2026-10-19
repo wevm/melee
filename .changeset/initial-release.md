@@ -1,5 +1,0 @@
----
-'ondine': patch
----
-
-Initial release.
