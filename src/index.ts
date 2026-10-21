@@ -1,3 +1,3 @@
-/** @module Browser runtime: mounts diagrams compiled ahead of time, without the compiler. */
-export * as Mount from './Mount.js'
-export { mount } from './Mount.js'
+/** @module Renders Mermaid diagrams to monochrome SVG, in TypeScript. */
+export { render, RenderError } from './Render.ts'
+export * as Render from './Render.ts'

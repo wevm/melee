@@ -1,11 +1,3 @@
-dist
 node_modules
-*.tsbuildinfo
-target
-.vitest-attachments
-src/internal/*.generated.ts
-src/internal/*.generated.wasm
-test/oracles/*.generated.wasm
-bench/results
-.wrangler
-.bin-*
+test/oracle/*.wasm
+dist

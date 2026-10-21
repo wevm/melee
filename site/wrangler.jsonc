@@ -1,9 +1,0 @@
-{
-  "$schema": "../node_modules/wrangler/config-schema.json",
-  "name": "ondine",
-  "compatibility_date": "2026-09-21",
-  "compatibility_flags": ["nodejs_compat"],
-  "main": "./src/entry.server.ts",
-  "observability": { "enabled": true },
-  "routes": [{ "custom_domain": true, "pattern": "ondine.sh" }],
-}

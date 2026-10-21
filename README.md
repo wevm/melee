@@ -1,64 +1,61 @@
-<h1 align="center">Ondine</h1>
+# Ondine
 
-<p align="center">
-  Mermaid diagrams, compiled with Rust
-</p>
+Monochrome Mermaid diagrams, compiled with TypeScript. Now 100% stainless.
 
-<p align="center">
-  <a href="#overview">Overview</a> · <a href="#agent-prompt">Agent Prompt</a> · <a href="#philosophy">Philosophy</a> · <a href="#features">Features</a> · <a href="#documentation">Documentation</a> · <a href="site/src/content/docs/guides/vite.mdx">Guides</a> · <a href="site/src/content/docs/api/compiler.mdx">API Reference</a>
-</p>
+The compiler is a port of the Rust compiler it replaces and renders the same SVG, byte for byte, without WebAssembly. Mermaids and rust never mixed well anyway. Too much salt water.
 
-## Overview
+```ts
+import { render } from 'ondine'
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/overview-dark.svg">
-  <img alt="Sequence diagram rendered by Ondine" src=".github/assets/overview-light.svg">
-</picture>
-
-```text
-sequenceDiagram
-  participant Browser
-  participant Server
-  participant Database
-  Browser->>Server: GET /orders
-  Server->>Database: SELECT * FROM orders
-  Database-->>Server: rows
-  alt cached
-    Server-->>Browser: 304 Not Modified
-  else fresh
-    Server-->>Browser: 200 OK
-  end
+// Compiles a diagram to SVG. Throws `RenderError` with Mermaid's diagnostics on bad input.
+const { svg, width, height } = render('flowchart LR\n  A --> B')
 ```
 
-## Agent Prompt
+## Current Status
 
-Paste this prompt into a coding agent:
+Swimming along nicely.
 
-```txt
-Read github.com/wevm/ondine and help me render my Mermaid diagrams with Ondine.
-```
+- **Diagram types:** all 33 types of the Rust compiler, with the shared pipeline: preprocessing, front matter and directives, detection, YAML, text layout, the layered, compound, and lane layouts, shapes, edges, and SVG emission.
+- **Source:** the Rust compiler at `6a1586e5af980e67c104239593ae931837157b8b`. `src/compiler/` mirrors the layout of its `crates/compiler/src`, one TypeScript module per Rust module.
 
-## Philosophy
+## Verification
 
-- **Compiled.** Diagrams compile ahead of time, so pages ship SVG instead of a renderer.
-- **Compatible.** Every diagram accepts the same input as Mermaid.
-- **Precise.** Square outlines and rounded orthogonal edges.
-- **Small.** A 210-byte runtime (gzip) mounts precompiled diagrams.
+Trust, but verify. (Formerly: Rust, but verify.) Nobody has to take the port's word for anything:
 
-## Features
+| Check | Command | What it compares |
+| --- | --- | --- |
+| Parity | `pnpm test`, `pnpm test:dist` for the bundle | 12,935 cases against outputs recorded from the Rust compiler's WebAssembly build: every vector of every type, five option variants of each, and each line prefix of each (SVG, size, links, errors) |
+| Fuzzing | `pnpm fuzz` | Random mutants of the vectors, rendered by both compilers and compared. `--type` limits it to some types |
+| Types | `pnpm check:types` | TypeScript in strict mode |
 
-- [**Vite Plugin**](site/src/content/docs/guides/vite.mdx): `.mmd` imports compiled to SVG at build time.
-- [**CLI**](site/src/content/docs/guides/cli.mdx): the `ondine` command compiles diagrams from files or standard input.
-- [**Node Compiler**](site/src/content/docs/guides/node.mdx): `ondine/compiler` renders source to SVG in scripts and servers.
-- [**Markdown and MDX**](site/src/content/docs/api/remark.mdx): `ondine/remark` replaces ` ```mermaid ` fences with compiled SVG.
-- [**In-Browser Compilation**](site/src/content/docs/guides/browser.mdx): opt-in `ondine/compiler/wasm` modules, one per diagram type or `all`.
-- [**GitHub Images**](site/src/content/docs/guides/github.mdx): an image Worker renders diagrams encoded in a URL for READMEs.
-- [**Theming**](site/src/content/docs/guides/theming.mdx): `--ondine-*` CSS custom properties switch schemes without compiling again.
-- [**Mounting**](site/src/content/docs/guides/mounting.mdx): `mount` inserts precompiled SVG without downloading a parser or layout code.
+`pnpm oracle` re-records the expected results. It needs `test/oracle/core.wasm`, built as described in `scripts/oracle.ts`.
 
-## Documentation
+## Performance
 
-Head to the [documentation](https://ondine.sh) to get started and learn more about Ondine.
-## License
+`pnpm bench` renders the vectors of each type with this package and with the Rust compiler built to WebAssembly, after checking that all of them emit the same SVG. The Rust compiler shipped its `opt-level = 3` build for Node and its `opt-level = "z"` builds for browsers. Median warm time per pass of the bundle from `pnpm build`, in Node 26.8 on Linux (16 threads):
 
-[MIT](LICENSE)
+| Type | Vectors | TypeScript | Rust, `opt-level = 3` | Rust, `opt-level = "z"` |
+| --- | ---: | ---: | ---: | ---: |
+| flowchart | 181 | 17.5 ms | 13.9 ms | 26.9 ms |
+| sequence | 45 | 1.38 ms | 1.14 ms | 2.05 ms |
+| class | 46 | 2.50 ms | 1.78 ms | 3.21 ms |
+| state | 31 | 2.80 ms | 1.89 ms | 3.55 ms |
+| git | 41 | 2.54 ms | 2.28 ms | 3.99 ms |
+| usecase | 30 | 2.66 ms | 1.64 ms | 2.91 ms |
+| sankey | 14 | 0.99 ms | 0.71 ms | 1.40 ms |
+| venn | 14 | 0.90 ms | 1.00 ms | 1.54 ms |
+
+Across all 33 types, the geometric mean time is 1.27 times that of the `opt-level = 3` module and 0.64 times that of the `opt-level = "z"` module. Every type renders faster than with the `opt-level = "z"` module, and four render faster than with the `opt-level = 3` module. `pnpm bench` prints every type.
+
+In other words: browsers used to get the `opt-level = "z"` build, and TypeScript beats it on every single type. Turns out you don't have to be rusty to be quick.
+
+| Measure | TypeScript | Rust, `opt-level = 3` | Rust, `opt-level = "z"` |
+| --- | ---: | ---: | ---: |
+| Cold start (load and first render) | 52 ms | 41 ms | 27 ms |
+| Size | 313 kB gzip | 3.7 MB | 2.0 MB |
+
+The WebAssembly sizes are uncompressed modules with every type. Cold start is the one lane where the water is still a little chilly.
+
+## Licenses
+
+[MIT](LICENSE). No borrowing required: you get to keep it. The compiler ports the Rust compiler, which ports Pele. Test vectors come from Mermaid and Pele ([test/vectors](test/vectors)).

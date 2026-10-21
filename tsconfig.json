@@ -1,46 +1,19 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
-    // Environment Settings
-    // See also https://aka.ms/tsconfig/module
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "target": "esnext",
-    "paths": {
-      "ondine": ["./src/index.ts"],
-      "ondine/compiler": ["./src/compiler/index.ts"],
-      "ondine/compiler/wasm": ["./src/compiler/wasm.ts"],
-      "ondine/compiler/wasm/all": ["./src/compiler/all.ts"],
-      "ondine/remark": ["./src/remark/index.ts"],
-      "ondine/vite": ["./src/vite/index.ts"]
-    },
-    "types": ["node", "vite-plus/test/globals"],
-
-    // Other Outputs
-    "sourceMap": true,
-    "declaration": true,
-    "declarationMap": true,
-
-    // Stricter Typechecking Options
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-
-    // Style Options
-    // "noImplicitReturns": true,
-    // "noImplicitOverride": true,
-    // "noUnusedLocals": true,
-    // "noUnusedParameters": true,
-    // "noFallthroughCasesInSwitch": true,
-    // "noPropertyAccessFromIndexSignature": true,
-
-    // Recommended Options
-    "strict": true,
-    "verbatimModuleSyntax": true,
-    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "lib": ["ES2024"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "noEmit": true,
-    "noUncheckedSideEffectImports": true,
-    "moduleDetection": "force",
-    "skipLibCheck": true
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2024",
+    "types": ["node"],
+    "verbatimModuleSyntax": true
   },
-  "exclude": ["dist", "node_modules", "site", "target", "test/fixtures", "video"]
+  "include": ["src", "scripts", "test"]
 }
