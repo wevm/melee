@@ -1,5 +1,5 @@
-/** @module Renders Mermaid source to monochrome SVG through compiler modules supplied by the host. */
-import * as Wasm from './internal/Wasm.js'
+/** @module Renders Mermaid source to monochrome SVG with the TypeScript compiler. */
+import * as Compiler from './compiler/lib.ts'
 
 /** Thrown when source cannot be rendered. Messages match Mermaid's diagnostics. */
 export class RenderError extends Error {
@@ -42,65 +42,44 @@ export declare namespace RenderError {
 }
 
 /**
- * Creates a renderer from caller-supplied diagram modules.
- *
- * Each module holds one diagram type, or `all` of them. Modules may be precompiled by the host's
- * bundler, as Cloudflare Workers require, or given as base64 bytes.
+ * Renders Mermaid `source` to SVG.
  *
  * @example
  * ```ts
- * import { create } from 'ondine/compiler/wasm'
- * import { wasm as all } from 'ondine/compiler/wasm/all'
+ * import { render } from 'ondine'
  *
- * const { svg } = create({ modules: { all } }).render('flowchart LR\n  A --> B')
+ * // Compiles the diagram to an SVG string.
+ * const { svg } = render('flowchart LR\n  A --> B')
  * ```
+ *
+ * @throws {RenderError} When the type is unsupported, the source is invalid, or a limit is exceeded.
  */
-export function create(options: create.Options): create.ReturnType {
-  const instances = new Map<string, Wasm.Instance>()
-  const instance = (type: string) => {
-    let found = instances.get(type)
-    if (found) return found
+export function render(source: string, options: render.Options = {}): render.ReturnType {
+  // The compiler reads no clock. Like JSON, it reads a time that is not a number as none.
+  const time = options.now ?? Date.now()
+  const now = typeof time === 'number' ? time : Number.NaN
 
-    const module = options.modules[type]
-    if (module === undefined) return undefined
-    found = Wasm.instantiate(module)
-    instances.set(type, found)
-    return found
-  }
-
-  const types = Object.keys(options.modules)
-
-  return {
-    render(source, renderOptions = {}) {
-      const first = types[0] === undefined ? undefined : instance(types[0])
-      if (first === undefined) throw new Error('Render.create needs at least one module.')
-
-      const json = serialize(renderOptions)
-      // The compiler reads no clock. Like JSON, it reads a time that is not a number as none.
-      const time = renderOptions.now ?? Date.now()
-      const now = typeof time === 'number' ? time : Number.NaN
-      const result = first.render(source, json, now)
-      // A module reports the detected type when it does not include it.
-      if (!result.ok && result.code === 'unsupported-diagram' && result.type !== undefined) {
-        const owner = instance(result.type)
-        if (owner) return unwrap(owner.render(source, json, now))
-      }
-      return unwrap(result)
-    },
-  }
-}
-
-export declare namespace create {
-  /** Factory options. */
-  type Options = {
-    /** WebAssembly modules by diagram type, as compiled modules or base64 bytes. */
-    readonly modules: Readonly<Record<string, WebAssembly.Module | string>>
-  }
-
-  /** A renderer over the given modules. */
-  type ReturnType = {
-    /** Renders `source`, choosing the module for its diagram type. */
-    readonly render: (source: string, options?: render.Options) => render.ReturnType
+  try {
+    // Rust strings hold no lone surrogates. Ondine's WebAssembly boundary encodes them as U+FFFD,
+    // and so does this one.
+    const result = Compiler.render(source.toWellFormed(), serialize(options), now)
+    return {
+      height: result.height,
+      links: result.links,
+      svg: result.svg,
+      type: result.type,
+      width: result.width,
+    }
+  } catch (error) {
+    if (!(error instanceof Compiler.CompileError)) throw error
+    throw new RenderError({
+      code: error.code,
+      column: error.column,
+      line: error.line,
+      message: error.message,
+      snippet: error.snippet,
+      type: error.type,
+    })
   }
 }
 
@@ -115,8 +94,18 @@ export declare namespace render {
     readonly fontSize?: number | undefined
     /** Prefix for element IDs, to keep several diagrams on one page apart. */
     readonly idPrefix?: string | undefined
+    /** Schemes an image may use besides a relative address. */
+    readonly imageSchemes?: readonly string[] | undefined
+    /** Whether images are drawn. Defaults to `true`. */
+    readonly images?: boolean | undefined
     /** The most characters of source to accept. Defaults to `50000`. */
     readonly limit?: number | undefined
+    /** The `rel` of links. Defaults to `noopener`; empty omits it. */
+    readonly linkRel?: string | undefined
+    /** Schemes a link may use besides a relative address. */
+    readonly linkSchemes?: readonly string[] | undefined
+    /** Whether links are drawn. Defaults to `true`. */
+    readonly links?: boolean | undefined
     /** The most edges a flowchart may have. Defaults to `5000`. */
     readonly maxEdges?: number | undefined
     /** The width available to the diagram, in pixels. */
@@ -136,7 +125,7 @@ export declare namespace render {
     /** Height in pixels. */
     readonly height: number
     /** Links in drawing order. */
-    readonly links: readonly Wasm.Link[]
+    readonly links: readonly Link[]
     /** The SVG document. */
     readonly svg: string
     /** The detected diagram type. */
@@ -144,22 +133,23 @@ export declare namespace render {
     /** Width in pixels. */
     readonly width: number
   }
+
+  /** A link drawn in a diagram. */
+  type Link = {
+    /** The address. */
+    readonly href: string
+    /** The id of the element that carries the link. */
+    readonly id: string
+    /** Whether the address points inside the page. */
+    readonly internal: boolean
+  }
 }
 
-/** Options as the compiler reads them, without the time, which is passed apart. Empty for none. */
+/**
+ * Options as the compiler reads them, without the time, which is passed apart. Empty for none.
+ * The compiler reads JSON so it treats ill-typed and non-finite values as Ondine does.
+ */
 function serialize(options: render.Options): string {
   for (const _ in options) return JSON.stringify({ ...options, now: undefined })
   return ''
-}
-
-function unwrap(result: Wasm.Result): render.ReturnType {
-  if (!result.ok) throw new RenderError({ ...result, code: result.code as RenderError.Code })
-
-  return {
-    height: result.height,
-    links: result.links,
-    svg: result.svg,
-    type: result.type,
-    width: result.width,
-  }
 }
